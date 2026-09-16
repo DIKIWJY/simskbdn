@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/* ─── Global Base ─────────────────────────────────────────────────────────── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ─── Focus ring ──────────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ─── Responsive table ────────────────────────────────────────────────────── */
+.overflow-x-auto { -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 640px) {
+  table th:nth-child(n+4):not(:last-child),
+  table td:nth-child(n+4):not(:last-child) { display: none; }
+}
+
+/* ─── Print ───────────────────────────────────────────────────────────────── */
+@media print {
+  aside, header, button { display: none !important; }
+  main { padding: 0 !important; }
+}
+
+/* ─── Animations (dipakai Radix UI & komponen lain) ──────────────────────── */
+@keyframes slideInRight  { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes fadeIn        { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn       { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes slideDownFade { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUpFade   { from { opacity: 0; transform: translateY(6px); }  to { opacity: 1; transform: translateY(0); } }
+
+.animate-slide-in-right  { animation: slideInRight 0.2s ease-out; }
+.animate-fade-in         { animation: fadeIn 0.15s ease-out; }
+.animate-scale-in        { animation: scaleIn 0.15s ease-out; }
+.animate-slide-down-fade { animation: slideDownFade 0.15s ease-out; }
+
+/* ─── Radix DropdownMenu / Tooltip portal ────────────────────────────────── */
+[data-radix-popper-content-wrapper] { z-index: 50 !important; }
+
+[data-state="open"][data-side="bottom"]  { animation: slideDownFade 0.15s ease-out; }
+[data-state="open"][data-side="top"]     { animation: slideUpFade 0.15s ease-out; }
+[data-state="open"]:not([data-side])     { animation: scaleIn 0.15s ease-out; }

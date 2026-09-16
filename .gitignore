@@ -1,0 +1,28 @@
+# ─── Credentials (WAJIB tidak di-commit) ────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+
+# ─── Frontend ────────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/out/
+
+# ─── Backend ─────────────────────────────────────────────────────────────────
+backend/server
+backend/tmp/
+backend/*.exe
+
+# ─── Docker volumes ──────────────────────────────────────────────────────────
+postgres_data/
+minio_data/
+
+# ─── IDE & OS ─────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,6 @@
+.env
+*.md
+.git
+.gitignore
+tmp/
+server

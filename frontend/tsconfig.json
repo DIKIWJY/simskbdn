@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    /* ── Target & Module ──────────────────────────────────────── */
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+
+    /* ── JSX ───────────────────────────────────────────────────── */
+    "jsx": "preserve",
+
+    /* ── Path alias (@ → src/) ────────────────────────────────── */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* ── Output ────────────────────────────────────────────────── */
+    "noEmit": true,
+    "incremental": true,
+
+    /* ── Strictness — standar industri ────────────────────────── */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+
+    /* ── Additional checks ─────────────────────────────────────── */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+
+    /* ── Interop ───────────────────────────────────────────────── */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowJs": false,
+
+    /* ── Plugin Next.js ────────────────────────────────────────── */
+    "plugins": [{ "name": "next" }]
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

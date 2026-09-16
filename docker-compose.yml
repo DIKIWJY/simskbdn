@@ -1,0 +1,136 @@
+###############################################################
+# SIMSKBDN — docker-compose.yml
+# PT Pupuk Sriwidjaja Palembang
+#
+# Menjalankan 4 layanan:
+#   postgres  → database utama (port 5432)
+#   minio     → penyimpanan file PDF (port 9000, console 9001)
+#   backend   → API Go/Gin (port 8080)
+#   frontend  → Next.js TypeScript (port 3000)
+#
+# CARA PAKAI:
+#   1. cp .env.example .env  → isi semua nilainya
+#   2. docker compose up --build
+#   3. Buka http://localhost:3000
+#
+# Seed data demo (opsional, setelah backend running):
+#   docker compose exec backend go run ./cmd/seed/main.go
+###############################################################
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: simskbdn_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME}
+      POSTGRES_USER:     ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MinIO ──────────────────────────────────────────────────
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: simskbdn_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Buat bucket MinIO saat pertama kali dijalankan
+  minio_init:
+    image: quay.io/minio/mc:latest
+    container_name: simskbdn_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET:     ${MINIO_BUCKET}
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $$MINIO_ACCESS_KEY $$MINIO_SECRET_KEY;
+        mc mb --ignore-existing local/$$MINIO_BUCKET;
+        mc anonymous set download local/$$MINIO_BUCKET;
+        echo 'Bucket siap: '$$MINIO_BUCKET;
+      "
+
+  # ── Backend Go ─────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: simskbdn_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      DB_HOST:            postgres
+      DB_PORT:            5432
+      DB_USER:            ${DB_USER}
+      DB_PASSWORD:        ${DB_PASSWORD}
+      DB_NAME:            ${DB_NAME}
+      DB_SSL_MODE:        disable
+      JWT_SECRET:         ${JWT_SECRET}
+      JWT_ACCESS_EXPIRE:  ${JWT_ACCESS_EXPIRE:-15m}
+      JWT_REFRESH_EXPIRE: ${JWT_REFRESH_EXPIRE:-168h}
+      PORT:               8080
+      APP_ENV:            ${APP_ENV:-development}
+      APP_URL:            ${APP_URL:-http://localhost:3000}
+      MINIO_ENDPOINT:     minio:9000
+      MINIO_ACCESS_KEY:   ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY:   ${MINIO_SECRET_KEY}
+      MINIO_BUCKET:       ${MINIO_BUCKET}
+      MINIO_USE_SSL:      "false"
+      SMTP_HOST:          ${SMTP_HOST:-}
+      SMTP_PORT:          ${SMTP_PORT:-587}
+      SMTP_USER:          ${SMTP_USER:-}
+      SMTP_PASS:          ${SMTP_PASS:-}
+      SMTP_FROM:          ${SMTP_FROM:-}
+    ports:
+      - "8080:8080"
+
+  # ── Frontend Next.js ───────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: simskbdn_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:8080
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  minio_data:
