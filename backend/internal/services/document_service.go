@@ -386,10 +386,16 @@ func (s *documentService) GetDocument(
 	latest, err := s.docRepo.GetLatestVersion(docID)
 	fileURL, downloadURL := "", ""
 	if err == nil {
-		fURL, _ := storage.GetFileURL(latest.FilePath)
-		dURL, _ := storage.GetFileDownloadURL(latest.FilePath, latest.FileName)
-		fileURL = strings.Replace(fURL, "http://minio:9000", "http://localhost:9000", 1)
-		downloadURL = strings.Replace(dURL, "http://minio:9000", "http://localhost:9000", 1)
+		bucket := s.cfg.MinIOBucket
+		if bucket == "" {
+			bucket = "pusri-documents"
+		}
+		publicHost := s.cfg.MinIOPublicURL
+		if publicHost == "" {
+			publicHost = "http://localhost:9000"
+		}
+		fileURL = fmt.Sprintf("%s/%s/%s", publicHost, bucket, latest.FilePath)
+		downloadURL = fmt.Sprintf("%s/%s/%s", publicHost, bucket, latest.FilePath)
 	}
 	return doc, fileURL, downloadURL, nil
 }
@@ -484,17 +490,15 @@ func (s *documentService) GetVersionFileURL(docID, versionNum, requesterID strin
 	num, _ := strconv.Atoi(versionNum)
 	for _, v := range versions {
 		if v.VersionNumber == num {
-			var rawURL string
-			var err error
-			if !preview {
-				rawURL, err = storage.GetFileDownloadURL(v.FilePath, v.FileName)
-			} else {
-				rawURL, err = storage.GetFileURL(v.FilePath)
+			bucket := s.cfg.MinIOBucket
+			if bucket == "" {
+				bucket = "pusri-documents"
 			}
-			if err != nil {
-				return "", err
+			publicHost := s.cfg.MinIOPublicURL
+			if publicHost == "" {
+				publicHost = "http://localhost:9000"
 			}
-			return strings.Replace(rawURL, "http://minio:9000", "http://localhost:9000", 1), nil
+			return fmt.Sprintf("%s/%s/%s", publicHost, bucket, v.FilePath), nil
 		}
 	}
 	return "", errors.New("versi tidak ditemukan")
