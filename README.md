@@ -1,8 +1,6 @@
 # SIMSKBDN — Sistem Informasi Monitoring SKBDN
-**PT Pupuk Sriwidjaja Palembang**
 
-Sistem monitoring dokumen SKBDN (Surat Kredit Berdokumen Dalam Negeri) untuk
-alur: **Buyer → AP2 → Keuangan → Admin**.
+Sistem monitoring dokumen SKBDN (Surat Kredit Berdokumen Dalam Negeri) untuk alur: **Buyer → AP2 → Keuangan → Admin**.
 
 ---
 
@@ -24,14 +22,13 @@ alur: **Buyer → AP2 → Keuangan → Admin**.
 ```bash
 # 1. Setup konfigurasi
 cp .env.example .env
-# → Buka .env dan isi DB_PASSWORD, JWT_SECRET, MINIO_SECRET_KEY
+# → Buka .env dan isi DB_PASSWORD, JWT_SECRET, MINIO_SECRET_KEY, MINIO_PUBLIC_URL
 
 # 2. Jalankan semua layanan
-docker compose up --build
+docker compose up --build -d
 
-# 3. (Opsional) Isi data demo
-docker compose exec backend go run ./cmd/seed/main.go
-```
+# 3. Isi data demo / seed database agar akun terbuat
+docker run --rm -v "${PWD}/backend:/app" -w /app --network simskbdn_default --env-file .env golang:alpine go run ./cmd/seed/main.go
 
 Buka **http://localhost:3000**
 
@@ -136,5 +133,4 @@ docker compose -f docker-compose.yml up --build -d
 ```
 
 ---
-
-© 2026 PT Pupuk Sriwidjaja Palembang. Dibuat dengan Go + Next.js.
+Dibuat dengan Go + Next.js.

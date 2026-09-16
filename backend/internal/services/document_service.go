@@ -92,9 +92,7 @@ func (s *documentService) CreateDocument(
 		storage.DeleteFile(filePath)
 		return nil, errors.New("tanggal expired harus setelah tanggal terbit")
 	}
-	// mimeStr disimpan sebagai metadata versi dokumen (bukan untuk keamanan —
-	// keamanan sudah divalidasi via magic bytes di validateFile() di atas).
-	// Menggunakan Content-Type dari header multipart karena ini hanya metadata.
+
 	mimeStr := header.Header.Get("Content-Type")
 	doc := &models.Document{
 		BuyerID:         buyerUUID,
@@ -360,7 +358,6 @@ func (s *documentService) MarkDisbursed(docID, adminID string) (*models.Document
 	}
 	s.saveHistory(docID, doc.Status, models.StatusDisbursed, adminID,
 		fmt.Sprintf("SKBDN dicairkan senilai Rp %.0f", doc.TotalPrice), doc.CurrentVersion)
-	)
 	doc.Status = models.StatusDisbursed
 	doc.DisbursedAt = &now
 	return doc, nil
@@ -379,7 +376,6 @@ func (s *documentService) GetDocument(
 	if role == models.RoleBuyer && doc.BuyerID.String() != requesterID {
 		return nil, "", "", errors.New("akses ditolak")
 	}
-	// Auto-expire jika melewati tanggal expired
 	if doc.IsExpired() &&
 		doc.Status != models.StatusExpired &&
 		doc.Status != models.StatusDisbursed &&
@@ -390,8 +386,10 @@ func (s *documentService) GetDocument(
 	latest, err := s.docRepo.GetLatestVersion(docID)
 	fileURL, downloadURL := "", ""
 	if err == nil {
-		fileURL, _ = storage.GetFileURL(latest.FilePath)
-		downloadURL, _ = storage.GetFileDownloadURL(latest.FilePath, latest.FileName)
+		fURL, _ := storage.GetFileURL(latest.FilePath)
+		dURL, _ := storage.GetFileDownloadURL(latest.FilePath, latest.FileName)
+		fileURL = strings.Replace(fURL, "http://minio:9000", "http://localhost:9000", 1)
+		downloadURL = strings.Replace(dURL, "http://minio:9000", "http://localhost:9000", 1)
 	}
 	return doc, fileURL, downloadURL, nil
 }
@@ -399,7 +397,6 @@ func (s *documentService) GetDocument(
 // ─── GetDocumentList ──────────────────────────────────────────────────────────
 
 func (s *documentService) GetDocumentList(p GetDocumentListParams) (*DocumentListResponse, error) {
-	// Guard: sanitize pagination params
 	if p.Page < 1 {
 		p.Page = 1
 	}
@@ -426,7 +423,6 @@ func (s *documentService) GetDocumentList(p GetDocumentListParams) (*DocumentLis
 		return nil, errors.New("gagal mengambil data dokumen")
 	}
 
-	// Auto-expire dokumen yang lewat tanggal
 	for i := range docs {
 		if docs[i].IsExpired() &&
 			docs[i].Status != models.StatusExpired &&
@@ -488,10 +484,17 @@ func (s *documentService) GetVersionFileURL(docID, versionNum, requesterID strin
 	num, _ := strconv.Atoi(versionNum)
 	for _, v := range versions {
 		if v.VersionNumber == num {
+			var rawURL string
+			var err error
 			if !preview {
-				return storage.GetFileDownloadURL(v.FilePath, v.FileName)
+				rawURL, err = storage.GetFileDownloadURL(v.FilePath, v.FileName)
+			} else {
+				rawURL, err = storage.GetFileURL(v.FilePath)
 			}
-			return storage.GetFileURL(v.FilePath)
+			if err != nil {
+				return "", err
+			}
+			return strings.Replace(rawURL, "http://minio:9000", "http://localhost:9000", 1), nil
 		}
 	}
 	return "", errors.New("versi tidak ditemukan")
@@ -515,7 +518,6 @@ func (s *documentService) CreateDocumentForBuyer(
 	if !buyer.IsActive {
 		return nil, errors.New("akun buyer tidak aktif")
 	}
-	// Upload dilakukan atas nama buyerID (bukan adminID) agar folder tetap per-buyer
 	return s.CreateDocument(buyerID, req, file, header)
 }
 
@@ -536,7 +538,6 @@ func (s *documentService) saveHistory(
 	if err1 != nil || err2 != nil {
 		return
 	}
-	// Abaikan error history — bukan operasi kritis, tidak boleh gagalkan flow utama
 	_ = s.docRepo.SaveRevisionHistory(&models.RevisionHistory{
 		DocumentID: docUUID,
 		FromStatus: from,
@@ -605,10 +606,10 @@ func (s *documentService) sendStatusNotification(
 	buyerID := doc.BuyerID.String()
 
 	type notifSpec struct {
-		targetID string
-		byRole   models.Role
-		title    string
-		message  string
+		targetID  string
+		byRole    models.Role
+		title     string
+		message   string
 		sendEmail bool
 	}
 
@@ -618,8 +619,6 @@ func (s *documentService) sendStatusNotification(
 			title:   "📋 Draft SKBDN Siap Direview",
 			message: fmt.Sprintf("AP2 meneruskan Draft SKBDN '%s' ke Keuangan untuk direview.", doc.Title),
 		},
-		// Notif tambahan ke Buyer saat AP2 teruskan ke Finance
-		// (ditangani via WS notifier, DB notif di sini hanya untuk Finance)
 		models.StatusDraftRevisionBuyer: {
 			targetID:  buyerID,
 			title:     "⚠️ Draft SKBDN Perlu Diperbaiki",
@@ -754,7 +753,6 @@ func (s *documentService) buildSKBDNUpdates(fields map[string]string) map[string
 
 // ─── Package-level helpers ────────────────────────────────────────────────────
 
-// parseUUID adalah helper untuk konversi string → uuid dengan error eksplisit.
 func parseUUID(s string) (uuid.UUID, error) {
 	u, err := uuid.Parse(s)
 	if err != nil {
@@ -763,7 +761,6 @@ func parseUUID(s string) (uuid.UUID, error) {
 	return u, nil
 }
 
-// parseDate — konversi string tanggal ke *time.Time, toleran berbagai format.
 func parseDate(s string) *time.Time {
 	if s == "" {
 		return nil
@@ -780,7 +777,6 @@ func parseDate(s string) *time.Time {
 	return nil
 }
 
-// formatRupiah — format angka ke string rupiah (tanpa desimal).
 func formatRupiah(amount float64) string {
 	s := strconv.FormatFloat(amount, 'f', 0, 64)
 	var out []byte
@@ -794,7 +790,6 @@ func formatRupiah(amount float64) string {
 	return string(out)
 }
 
-// validateFile — deteksi MIME type dari magic bytes (bukan header client).
 func validateFile(header *multipart.FileHeader) error {
 	if header.Size == 0 {
 		return errors.New("file tidak boleh kosong")
@@ -823,20 +818,18 @@ func validateFile(header *multipart.FileHeader) error {
 	return nil
 }
 
-// validateStatusTransition — state machine status dokumen.
-// Dipisah dari documentService menjadi fungsi package-level agar bisa ditest secara terpisah.
 func validateStatusTransition(current, next models.DocumentStatus, role models.Role) error {
 	type key struct {
 		From models.DocumentStatus
 		Role models.Role
 	}
 	allowed := map[key][]models.DocumentStatus{
-		{models.StatusDraftSubmitted, models.RoleAP2}:     {models.StatusDraftUnderReview, models.StatusDraftRevisionBuyer},
-		{models.StatusFinalSubmitted, models.RoleAP2}:     {models.StatusFinalUnderReview, models.StatusRevisionRequested},
+		{models.StatusDraftSubmitted, models.RoleAP2}:        {models.StatusDraftUnderReview, models.StatusDraftRevisionBuyer},
+		{models.StatusFinalSubmitted, models.RoleAP2}:        {models.StatusFinalUnderReview, models.StatusRevisionRequested},
 		{models.StatusDraftUnderReview, models.RoleFinance}: {models.StatusDraftApproved, models.StatusDraftRevisionBuyer},
 		{models.StatusFinalUnderReview, models.RoleFinance}: {models.StatusApproved, models.StatusRevisionRequested, models.StatusRejected},
 		{models.StatusFinalSentToFinance, models.RoleFinance}: {models.StatusFinalUnderReview},
-		{models.StatusUnderReview, models.RoleFinance}:     {models.StatusApproved, models.StatusRevisionRequested, models.StatusRejected},
+		{models.StatusUnderReview, models.RoleFinance}:       {models.StatusApproved, models.StatusRevisionRequested, models.StatusRejected},
 		{models.StatusApproved, models.RoleAdmin}:          {models.StatusDisbursed},
 		{models.StatusDraftSubmitted, models.RoleAdmin}:    {models.StatusDraftUnderReview, models.StatusDraftRevisionBuyer},
 		{models.StatusDraftVerifiedAP2, models.RoleAdmin}:  {models.StatusDraftUnderReview},
