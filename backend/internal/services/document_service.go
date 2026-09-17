@@ -390,10 +390,7 @@ func (s *documentService) GetDocument(
 		if bucket == "" {
 			bucket = "pusri-documents"
 		}
-		publicHost := s.cfg.MinIOPublicURL
-		if publicHost == "" {
-			publicHost = "http://localhost:9000"
-		}
+		publicHost := "http://localhost:9000"
 		fileURL = fmt.Sprintf("%s/%s/%s", publicHost, bucket, latest.FilePath)
 		downloadURL = fmt.Sprintf("%s/%s/%s", publicHost, bucket, latest.FilePath)
 	}
@@ -494,10 +491,7 @@ func (s *documentService) GetVersionFileURL(docID, versionNum, requesterID strin
 			if bucket == "" {
 				bucket = "pusri-documents"
 			}
-			publicHost := s.cfg.MinIOPublicURL
-			if publicHost == "" {
-				publicHost = "http://localhost:9000"
-			}
+			publicHost := "http://localhost:9000"
 			return fmt.Sprintf("%s/%s/%s", publicHost, bucket, v.FilePath), nil
 		}
 	}

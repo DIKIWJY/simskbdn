@@ -69,6 +69,11 @@ export default function AdminDocumentDetailPage({ docId, onClose }: AdminDocumen
   const fileURL = docData?.file_url;
   const s       = doc?.status;
 
+  // Variabel status turunan
+  const isDone      = !!s && ["disbursed", "rejected", "expired", "approved"].includes(s);
+  const canForward  = s === "draft_submitted";
+  const canReturn   = s === "draft_submitted";
+
   const inv = () => {
     ["documents", "document-stats"].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
     qc.invalidateQueries({ queryKey: ["document", docId] });
@@ -77,11 +82,6 @@ export default function AdminDocumentDetailPage({ docId, onClose }: AdminDocumen
   const doUpdate = async (status: DocumentStatus, n: string = notes) => {
     setBusy(true);
     try {
-      // PERBAIKAN BUG: method "updateStatusSales" tidak pernah ada di
-      // document.api.ts manapun — ini akan selalu gagal dengan runtime error
-      // "documentAPI.updateStatusSales is not a function" di kode asli.
-      // Diperbaiki ke updateStatusAdmin (endpoint PUT /documents/:id/status)
-      // yang secara semantik paling sesuai untuk aksi admin di komponen ini.
       await documentAPI.updateStatusAdmin(docId, { status, notes: n });
       const msg: Partial<Record<DocumentStatus, string>> = {
         draft_under_review:   "Draft diteruskan ke Keuangan!",
@@ -99,9 +99,6 @@ export default function AdminDocumentDetailPage({ docId, onClose }: AdminDocumen
     }
     setBusy(false);
   };
-
-  // ── Wewenang admin ──────────────────────────────────────────────────────
-  const canForward  = s === "draft_submitted";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">

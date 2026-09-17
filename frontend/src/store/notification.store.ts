@@ -1,17 +1,14 @@
 import { create } from "zustand";
 import type { StoreNotification, ApiNotification, DocumentStatus } from "@/types";
 
-// ─── State ────────────────────────────────────────────────────────────────────
-
 interface NotificationState {
   notifications: StoreNotification[];
   unreadCount: number;
 }
 
-// ─── Actions ──────────────────────────────────────────────────────────────────
-
 interface NotificationActions {
   addNotification: (notif: ApiNotification) => void;
+  loadFromDB: (notifs: ApiNotification[]) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
@@ -21,51 +18,47 @@ type NotificationStore = NotificationState & NotificationActions;
 
 const MAX_NOTIFICATIONS = 50;
 
-// ─── Store ────────────────────────────────────────────────────────────────────
+function normalize(notif: ApiNotification): StoreNotification {
+  return {
+    id: notif.id ?? `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    title:      notif.title,
+    message:    notif.message,
+    documentId: notif.document_id,
+    status:     notif.status as DocumentStatus | undefined,
+    actorName:  notif.actor_name,
+    actorRole:  notif.actor_role,
+    createdAt:  notif.created_at ?? new Date().toISOString(),
+    isRead:     notif.is_read ?? false,
+  };
+}
 
 export const useNotificationStore = create<NotificationStore>((set) => ({
-  // State
   notifications: [],
   unreadCount: 0,
 
-  // Actions
   addNotification: (notif: ApiNotification) => {
     set((state) => {
-      const normalized: StoreNotification = {
-        id:
-          notif.id ??
-          `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        title: notif.title,
-        message: notif.message,
-        documentId: notif.document_id,
-        status: notif.status as DocumentStatus | undefined,
-        actorName: notif.actor_name,
-        actorRole: notif.actor_role,
-        createdAt: notif.created_at ?? new Date().toISOString(),
-        isRead: false,
-      };
+      const n = normalize(notif);
+      if (state.notifications.some((e) => e.id === n.id)) return state;
+      const newNotifs = [n, ...state.notifications].slice(0, MAX_NOTIFICATIONS);
+      return { notifications: newNotifs, unreadCount: newNotifs.filter((x) => !x.isRead).length };
+    });
+  },
 
-      const newNotifs = [normalized, ...state.notifications].slice(
-        0,
-        MAX_NOTIFICATIONS,
-      );
-
+  loadFromDB: (notifs: ApiNotification[]) => {
+    set(() => {
+      const normalized = notifs.map(normalize);
       return {
-        notifications: newNotifs,
-        unreadCount: newNotifs.filter((n) => !n.isRead).length,
+        notifications: normalized.slice(0, MAX_NOTIFICATIONS),
+        unreadCount: normalized.filter((n) => !n.isRead).length,
       };
     });
   },
 
   markAsRead: (id: string) => {
     set((state) => {
-      const updated = state.notifications.map((n) =>
-        n.id === id ? { ...n, isRead: true } : n,
-      );
-      return {
-        notifications: updated,
-        unreadCount: updated.filter((n) => !n.isRead).length,
-      };
+      const updated = state.notifications.map((n) => n.id === id ? { ...n, isRead: true } : n);
+      return { notifications: updated, unreadCount: updated.filter((n) => !n.isRead).length };
     });
   },
 

@@ -17,7 +17,7 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
-import { useDocument } from "@/hooks/useDocuments";
+import { useDocument, useDocumentVersions } from "@/hooks/useDocuments";
 import {
   useAutoSave,
   useAnnotationSummary,
@@ -63,6 +63,7 @@ export default function DocumentAnnotatorClient() {
 
   // ── Hooks data ─────────────────────────────────────────────────────────
   const { data: docData } = useDocument(id);
+  const { data: versions } = useDocumentVersions(id); // fetch versions secara terpisah — lebih reliable
   const doc = docData?.document;
   const fileURL = docData?.file_url;
   // Read-only jika status bukan dalam fase review aktif
@@ -87,7 +88,7 @@ export default function DocumentAnnotatorClient() {
     if (!fileURL) return;
     setPdfLoading(true);
     getDocument(fileURL)
-      .promise.then((pdf) => {
+      .promise.then((pdf: PDFDocumentLike) => {
         setPdfDoc(pdf);
         setTotalPages(pdf.numPages);
         setPdfLoading(false);
@@ -99,14 +100,16 @@ export default function DocumentAnnotatorClient() {
   }, [fileURL]);
 
   // ── Set versionId dari data dokumen ─────────────────────────────────────
+  // Pakai hook versions terpisah (lebih reliable dari doc.versions yang
+  // kadang kosong karena timing response)
   useEffect(() => {
-    if (doc?.versions?.length) {
-      const latest = doc.versions.find(
+    if (versions?.length && doc) {
+      const latest = versions.find(
         (v) => v.version_number === doc.current_version,
-      );
-      if (latest) setVersionId(latest.id);
+      ) ?? versions[0];
+      if (latest?.id) setVersionId(latest.id);
     }
-  }, [doc]);
+  }, [versions, doc]);
 
   // ── Load anotasi ke canvas saat ganti halaman ────────────────────────────
   useEffect(() => {
@@ -310,10 +313,17 @@ export default function DocumentAnnotatorClient() {
           </button>
         </div>
 
-        {/* Approve button */}
+        {/* Approve button - simpan anotasi dulu sebelum setujui */}
         {!isReadOnly && (
           <button
-            onClick={() => approveDoc()}
+            onClick={async () => {
+              // Simpan semua anotasi terlebih dahulu sebelum setujui
+              const payload = buildPayload();
+              if (payload) {
+                try { await annotationAPI.savePage(id, payload); } catch {}
+              }
+              approveDoc();
+            }}
             disabled={isApprovePending}
             className="
               flex items-center gap-1.5 px-4 py-2 rounded-lg
@@ -323,6 +333,34 @@ export default function DocumentAnnotatorClient() {
             "
           >
             {isApprovePending ? "..." : "✓ Setujui"}
+          </button>
+        )}
+
+        {/* Minta Revisi — langsung kirim, tidak perlu buka modal lagi
+            karena kita sudah berada di mode anotasi */}
+        {!isReadOnly && (
+          <button
+            onClick={async () => {
+              // 1. Simpan anotasi final
+              const payload = buildPayload();
+              if (payload) {
+                setIsSaving(true);
+                try { await annotationAPI.savePage(id, payload); setSavedAt(new Date()); }
+                catch { toast.error("Gagal menyimpan anotasi — coba lagi"); setIsSaving(false); return; }
+                setIsSaving(false);
+              }
+              // 2. Kirim permintaan revisi ke Buyer
+              requestRevision({ notes: "Silakan cek anotasi pada dokumen untuk detail revisi.", file: null, mode: "annotate" });
+            }}
+            disabled={isRevPending || isSaving}
+            className="
+              flex items-center gap-1.5 px-4 py-2 rounded-lg
+              text-sm font-medium text-white
+              bg-red-500 hover:bg-red-600
+              disabled:opacity-50 transition-colors
+            "
+          >
+            {isRevPending || isSaving ? "Mengirim..." : "⚑ Minta Revisi"}
           </button>
         )}
       </div>

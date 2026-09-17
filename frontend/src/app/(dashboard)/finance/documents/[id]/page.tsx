@@ -153,7 +153,8 @@ export default function FinanceDocumentDetailPage() {
   const isDraftReview  = status === "draft_under_review";                                  // → draft_approved | draft_revision_buyer
   const isFinalWaiting = !!status && ["final_submitted", "final_sent_to_finance"].includes(status);     // → final_under_review
   const isFinalReview  = !!status && ["final_under_review", "under_review"].includes(status);           // → approved | revision_requested | rejected
-  const isApproved     = status === "approved";                                             // pencairan oleh Admin
+  const isApproved     = status === "approved";
+  const isDone         = !!status && ["disbursed", "rejected", "expired", "approved"].includes(status);
   const isRevisionWaiting = status === "revision_requested" || status === "draft_revision_buyer"; // Menunggu Buyer revisi
   const isWaitingBuyer    = status === "draft_approved"; // Menunggu Buyer upload Final
   const canAnnotate    = isDraftReview || isFinalReview;

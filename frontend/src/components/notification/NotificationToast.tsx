@@ -23,7 +23,7 @@ const EVENT_CONFIG: Partial<Record<WSEventName, EventConfigEntry>> = {
 
 export default function NotificationToast() {
   const qc = useQueryClient();
-  const addNotification = useNotificationStore(s => s.addNotification);
+  const addNotification = useNotificationStore((s: { addNotification: (n: ApiNotification) => void }) => s.addNotification);
 
   // PERBAIKAN BUG: sebelumnya kode mengakses `data.event` untuk menentukan
   // ikon/warna toast — tapi payload WebSocket dari backend (lihat

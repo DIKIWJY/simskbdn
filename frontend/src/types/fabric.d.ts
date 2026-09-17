@@ -1,12 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Deklarasi tipe untuk "fabric" (Fabric.js v5).
-//
-// Package fabric v5 tidak menyertakan file .d.ts sendiri, dan tidak ada
-// @types/fabric yang cocok untuk versi ini. File ini HANYA mendeklarasikan
-// API yang benar-benar dipakai di FabricCanvas.tsx — bukan tipe lengkap
-// seluruh library Fabric.js (yang jauh lebih besar).
-// ─────────────────────────────────────────────────────────────────────────────
-
 declare module "fabric" {
   export namespace fabric {
     interface IObjectOptions {
@@ -28,11 +19,9 @@ declare module "fabric" {
       fontFamily?: string;
       backgroundColor?: string;
       padding?: number;
-      borderRadius?: number;
       editable?: boolean;
       [key: string]: unknown;
     }
-
     class Object {
       id?: string;
       type?: string;
@@ -51,37 +40,33 @@ declare module "fabric" {
       set(options: Partial<IObjectOptions> | Record<string, unknown>): this;
       toObject(propertiesToInclude?: string[]): Record<string, unknown>;
     }
-
     class IText extends Object {
       constructor(text: string, options?: IObjectOptions);
       enterEditing(): void;
       selectAll(): void;
     }
-
     class Rect extends Object {
       constructor(options?: IObjectOptions);
     }
-
     class Line extends Object {
-      constructor(points: [number, number, number, number], options?: IObjectOptions);
+      constructor(
+        points: [number, number, number, number],
+        options?: IObjectOptions,
+      );
     }
-
     interface Point {
       x: number;
       y: number;
     }
-
     interface FabricEvent {
       e: MouseEvent | TouchEvent;
       target?: Object;
       path?: Object & { id?: string };
     }
-
     interface FreeDrawingBrush {
       color: string;
       width: number;
     }
-
     interface CanvasOptions {
       width?: number;
       height?: number;
@@ -89,7 +74,6 @@ declare module "fabric" {
       renderOnAddRemove?: boolean;
       preserveObjectStacking?: boolean;
     }
-
     class Canvas {
       constructor(element: HTMLCanvasElement | string, options?: CanvasOptions);
       selectionColor: string;
@@ -99,7 +83,6 @@ declare module "fabric" {
       selection: boolean;
       defaultCursor: string;
       freeDrawingBrush: FreeDrawingBrush;
-
       add(...objects: Object[]): this;
       remove(...objects: Object[]): this;
       renderAll(): this;
@@ -118,7 +101,6 @@ declare module "fabric" {
       off(event: string): this;
     }
   }
-
   export const fabric: {
     Object: typeof fabric.Object;
     Canvas: typeof fabric.Canvas;
@@ -126,5 +108,5 @@ declare module "fabric" {
     Rect: typeof fabric.Rect;
     Line: typeof fabric.Line;
   };
-  export { fabric as default };
+  export default fabric;
 }

@@ -11,7 +11,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import axios from "axios";
 
-import { useDocument } from "@/hooks/useDocuments";
+import { useDocument, useDocumentVersions } from "@/hooks/useDocuments";
 import {
   useAutoSave,
   useAnnotationSummary,
@@ -68,6 +68,7 @@ export default function AP2DocumentAnnotatorClient() {
 
   // ── Hooks data ─────────────────────────────────────────────────────────
   const { data: docData } = useDocument(id);
+  const { data: versions } = useDocumentVersions(id);
   const doc = docData?.document;
   const fileURL = docData?.file_url;
   const status = doc?.status;
@@ -90,7 +91,7 @@ export default function AP2DocumentAnnotatorClient() {
     if (!fileURL) return;
     setPdfLoading(true);
     getDocument(fileURL)
-      .promise.then((pdf) => {
+      .promise.then((pdf: PDFDocumentLike) => {
         setPdfDoc(pdf);
         setTotalPages(pdf.numPages);
         setPdfLoading(false);
@@ -103,13 +104,13 @@ export default function AP2DocumentAnnotatorClient() {
 
   // ── Set versionId dari data dokumen ─────────────────────────────────────
   useEffect(() => {
-    if (doc?.versions?.length) {
-      const latest = doc.versions.find(
+    if (versions?.length && doc) {
+      const latest = versions.find(
         (v) => v.version_number === doc.current_version,
-      );
-      if (latest) setVersionId(latest.id);
+      ) ?? versions[0];
+      if (latest?.id) setVersionId(latest.id);
     }
-  }, [doc]);
+  }, [versions, doc]);
 
   // ── Load anotasi ke canvas saat ganti halaman ────────────────────────────
   useEffect(() => {
@@ -296,10 +297,16 @@ export default function AP2DocumentAnnotatorClient() {
           </button>
         </div>
 
-        {/* Verifikasi & Teruskan button */}
+        {/* Verifikasi & Teruskan button — simpan anotasi dulu */}
         {!isReadOnly && (
           <button
-            onClick={() => forwardToFinance()}
+            onClick={async () => {
+              const payload = buildPayload();
+              if (payload) {
+                try { await annotationAPI.savePage(id, payload); } catch {}
+              }
+              forwardToFinance();
+            }}
             disabled={isForwardPending}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 transition-colors"
           >
@@ -308,6 +315,26 @@ export default function AP2DocumentAnnotatorClient() {
                 <ArrowRight size={14} /> Verifikasi &amp; Teruskan
               </>
             )}
+          </button>
+        )}
+
+        {/* Kembalikan ke Buyer — simpan anotasi dulu, langsung kirim */}
+        {!isReadOnly && (
+          <button
+            onClick={async () => {
+              const payload = buildPayload();
+              if (payload) {
+                setIsSaving(true);
+                try { await annotationAPI.savePage(id, payload); setSavedAt(new Date()); }
+                catch { toast.error("Gagal menyimpan anotasi"); setIsSaving(false); return; }
+                setIsSaving(false);
+              }
+              returnToBuyer({ notes: "Silakan cek anotasi pada dokumen untuk detail revisi.", file: null, mode: "annotate" });
+            }}
+            disabled={isRevPending || isSaving}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+          >
+            {isRevPending || isSaving ? "Mengirim..." : "⚑ Kembalikan ke Buyer"}
           </button>
         )}
       </div>

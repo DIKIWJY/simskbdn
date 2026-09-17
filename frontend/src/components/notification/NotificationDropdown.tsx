@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   FileText,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { useNotificationStore } from "@/store/notification.store";
 import { useAuthStore } from "@/store/auth.store";
+import { notificationAPI } from "@/api/notification.api";
 import type { StoreNotification, UserRole } from "@/types";
 
 const STATUS_ICON: Record<string, LucideIcon> = {
@@ -46,8 +48,20 @@ export default function NotificationDropdown() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user } = useAuthStore();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification, loadFromDB } =
     useNotificationStore();
+
+  // Fetch notifikasi dari DB saat dropdown dibuka — supaya tetap ada setelah refresh
+  const { refetch } = useQuery({
+    queryKey: ["notifications-dropdown"],
+    queryFn: () => notificationAPI.getAll().then(r => {
+      const dbNotifs = r.data.data ?? [];
+      loadFromDB(dbNotifs); // replace state dengan data DB terbaru
+      return dbNotifs;
+    }),
+    enabled: false,
+    staleTime: 0, // selalu fresh setiap dibuka
+  });
 
   // Tutup dropdown kalau klik di luar
   useEffect(() => {
@@ -60,8 +74,15 @@ export default function NotificationDropdown() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const handleToggle = () => {
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) refetch(); // fetch dari DB setiap kali dibuka
+  };
+
   const handleNotifClick = (notif: StoreNotification) => {
     markAsRead(notif.id);
+    notificationAPI.markRead(notif.id).catch(() => {}); // tandai di DB juga
     setIsOpen(false);
     if (notif.documentId) {
       const paths: Partial<Record<UserRole, string>> = {
@@ -78,7 +99,7 @@ export default function NotificationDropdown() {
     <div ref={dropdownRef} className="relative">
       {/* Bell button */}
       <button
-        onClick={() => setIsOpen((s) => !s)}
+        onClick={() => handleToggle()}
         className="relative p-2 rounded-lg text-gray-500
                    hover:bg-gray-100 hover:text-gray-700 transition-colors"
       >
@@ -123,7 +144,7 @@ export default function NotificationDropdown() {
             <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <button
-                  onClick={markAllAsRead}
+                  onClick={() => { markAllAsRead(); notificationAPI.markAllRead().catch(() => {}); }}
                   className="p-1.5 rounded-lg text-gray-400 hover:text-green-600
                              hover:bg-green-50 transition-colors"
                   title="Tandai semua dibaca"
@@ -152,7 +173,7 @@ export default function NotificationDropdown() {
                 <p className="text-xs text-gray-400">Belum ada notifikasi</p>
               </div>
             ) : (
-              notifications.slice(0, 20).map((notif) => {
+              notifications.slice(0, 20).map((notif: StoreNotification) => {
                 const Icon = (notif.status && STATUS_ICON[notif.status]) || FileText;
                 const color =
                   (notif.status && STATUS_COLOR[notif.status]) || "text-gray-500 bg-gray-100";

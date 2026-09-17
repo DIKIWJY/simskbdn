@@ -14,41 +14,71 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
-
-var MinioClient *minio.Client
+var MinioClient *minio.Client       // client internal (minio:9000) — untuk upload/download
+var publicMinioClient *minio.Client // client publik (localhost:9000) — untuk presigned URL
 var BucketName string
 var MinioAvailable bool
 
-var publicMinioEndpoint string
-
-// InitMinio menerima parameter dari AppConfig (bukan os.Getenv langsung).
-// Semua konfigurasi dibaca di satu tempat (config.Load) — tidak tersebar.
+// InitMinio menerima parameter dari AppConfig.
+// Membuat DUA client:
+//  1. MinioClient (internal) — untuk operasi upload/download di dalam Docker
+//  2. publicMinioClient     — untuk generate presigned URL yang bisa dibuka browser
+//
+// ALASAN: presigned URL mengandung signature yang dihitung berdasarkan host.
+// Kalau client pakai host "minio:9000" lalu kita ganti hostnya ke "localhost:9000",
+// signature tidak cocok → SignatureDoesNotMatch error.
+// Solusinya: buat client kedua yang sudah pakai host publik sejak awal.
 func InitMinio(endpoint, accessKey, secretKey, bucket string, useSSL bool) {
 	BucketName = bucket
-	publicMinioEndpoint = endpoint // simpan untuk replace di presigned URL
 
-	client, err := minio.New(endpoint, &minio.Options{
+	// Client 1: internal — untuk upload/download file
+	internalClient, err := minio.New(endpoint, &minio.Options{
 		Creds: credentials.NewStaticV4(accessKey, secretKey, ""), Secure: useSSL,
 	})
 	if err != nil {
 		log.Printf("⚠️  MinIO tidak tersambung: %v — upload file tidak tersedia", err)
-		MinioAvailable = false; return
+		MinioAvailable = false
+		return
 	}
+
+	// Pastikan bucket ada
 	ctx := context.Background()
-	exists, err := client.BucketExists(ctx, BucketName)
+	exists, err := internalClient.BucketExists(ctx, BucketName)
 	if err != nil {
 		log.Printf("⚠️  MinIO error: %v", err)
-		log.Println("   Jalankan: minio.exe server C:\\minio\\data --console-address :9001")
-		MinioAvailable = false; return
+		MinioAvailable = false
+		return
 	}
 	if !exists {
-		if err := client.MakeBucket(ctx, BucketName, minio.MakeBucketOptions{}); err != nil {
-			log.Printf("⚠️  Gagal buat bucket: %v", err); MinioAvailable = false; return
+		if err := internalClient.MakeBucket(ctx, BucketName, minio.MakeBucketOptions{}); err != nil {
+			log.Printf("⚠️  Gagal buat bucket: %v", err)
+			MinioAvailable = false
+			return
 		}
 		log.Printf("✅ Bucket '%s' dibuat", BucketName)
 	}
-	MinioClient = client; MinioAvailable = true
-	log.Println("✅ MinIO terkoneksi!")
+	MinioClient = internalClient
+	MinioAvailable = true
+
+	// Client 2: publik — untuk presigned URL yang bisa dibuka browser
+	// Pakai MINIO_PUBLIC_ENDPOINT (default: localhost:9000)
+	publicEndpoint := os.Getenv("MINIO_PUBLIC_ENDPOINT")
+	if publicEndpoint == "" {
+		publicEndpoint = "localhost:9000"
+	}
+
+	pubClient, err := minio.New(publicEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: false, // localhost selalu HTTP
+	})
+	if err != nil {
+		log.Printf("⚠️  Gagal buat public MinIO client: %v — file preview tidak tersedia", err)
+		publicMinioClient = internalClient // fallback ke internal
+	} else {
+		publicMinioClient = pubClient
+	}
+
+	log.Printf("✅ MinIO terkoneksi! (internal: %s, publik: %s)", endpoint, publicEndpoint)
 }
 
 func UploadFile(file multipart.File, header *multipart.FileHeader, folder string) (string, error) {
@@ -85,21 +115,20 @@ func GetFileDownloadURL(objectPath, filename string) (string, error) {
 }
 
 func presignedURL(objectPath string, reqParams url.Values) (string, error) {
-	if !MinioAvailable { return "", fmt.Errorf("MinIO tidak tersedia") }
-	u, err := MinioClient.PresignedGetObject(context.Background(), BucketName, objectPath, time.Hour, reqParams)
-	if err != nil { return "", err }
-
-	// PERBAIKAN KRITIS: MinIO client menggunakan endpoint internal Docker (minio:9000)
-	// saat generate presigned URL. URL ini tidak bisa diakses browser dari luar Docker.
-	// Kita replace host internal dengan localhost:9000 supaya browser bisa membuka file.
-	// Untuk production/deploy ke server, ganti dengan domain publik MinIO Anda.
-	publicHost := os.Getenv("MINIO_PUBLIC_ENDPOINT")
-	if publicHost == "" {
-		publicHost = "localhost:9000"
+	if !MinioAvailable {
+		return "", fmt.Errorf("MinIO tidak tersedia")
 	}
-	u.Host = publicHost
-	u.Scheme = "http"
-
+	// Gunakan publicMinioClient — client yang sudah dikonfigurasi dengan
+	// host publik (localhost:9000) sejak awal, sehingga signature yang
+	// dihasilkan valid untuk URL yang dibuka browser.
+	client := publicMinioClient
+	if client == nil {
+		client = MinioClient
+	}
+	u, err := client.PresignedGetObject(context.Background(), BucketName, objectPath, time.Hour, reqParams)
+	if err != nil {
+		return "", err
+	}
 	return u.String(), nil
 }
 

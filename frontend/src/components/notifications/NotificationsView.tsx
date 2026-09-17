@@ -50,6 +50,7 @@ export default function NotificationsView() {
     queryKey: ["notifications"],
     queryFn: () => notificationAPI.getAll().then(r => r.data.data ?? []),
     refetchInterval: 30_000,
+    staleTime: 0,
   });
 
   const readMut = useMutation({

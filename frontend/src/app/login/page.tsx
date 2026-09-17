@@ -189,6 +189,7 @@ export default function LoginPage() {
             [
               ["Buyer", "buyer@pusri.com"],
               ["Finance", "finance@pusri.com"],
+              ["AP2", "ap2@pusri.com"],
               ["Admin", "admin@pusri.com"],
             ] as const
           ).map(([role, email]) => (

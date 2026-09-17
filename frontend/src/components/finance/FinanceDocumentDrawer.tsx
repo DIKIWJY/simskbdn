@@ -168,6 +168,7 @@ export default function FinanceDocumentDrawer({ docId, onClose }: FinanceDocumen
   const canReviewFinal = !!status && ["final_submitted", "final_under_review", "final_sent_to_finance", "under_review"].includes(status);
   const canReview   = canReviewDraft || canReviewFinal;
   const canApprove  = canReviewFinal;
+  const isDone      = !!status && ["disbursed", "rejected", "expired", "approved"].includes(status);
 
   const doUpdate = (s: DocumentStatus, n: string = notes) => {
     updateStatus.mutate({ id: docId, status: s, notes: n }, {

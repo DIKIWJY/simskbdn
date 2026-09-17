@@ -207,6 +207,7 @@ function BuyerStats({ onOpen }: { onOpen?: (id: string) => void }) {
 }
 
 function DisbursedMonitor({ onOpen }: { onOpen?: (id: string) => void }) {
+  const { data } = useDocuments({ status: "approved", page: 1, limit: 20 });
   const docs = data?.data || [];
 
   return (
@@ -226,7 +227,7 @@ function DisbursedMonitor({ onOpen }: { onOpen?: (id: string) => void }) {
             <Banknote size={28} className="text-gray-200 mb-2"/>
             <p className="text-xs text-gray-400">Belum ada yang Verified</p>
           </div>
-        ) : docs.map(doc => (
+        ) : docs.map((doc: Document) => (
           <button key={doc.id} onClick={() => onOpen?.(doc.id)}
             className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-emerald-50/40 transition-colors text-left">
             <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
@@ -268,7 +269,7 @@ function ActivityFeed() {
       <div className="divide-y divide-gray-50">
         {docs.length === 0 ? (
           <p className="px-5 py-8 text-xs text-gray-400 text-center">Belum ada aktivitas</p>
-        ) : docs.map(doc => (
+        ) : docs.map((doc: Document) => (
           <div key={doc.id} className="flex items-start gap-3 px-5 py-3">
             <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${statusColor[doc.status]||"bg-gray-400"}`}/>
             <div className="flex-1 min-w-0">
